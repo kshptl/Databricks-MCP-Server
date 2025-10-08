@@ -1,3 +1,8 @@
+# Copyright (c) 2025 Kush Patel
+# Dual-licensed: AGPL-3.0-only OR commercial license.
+# If you obtained this from GitHub, you may use it under the AGPL-3.0 terms.
+# For commercial terms, contact kushapatel@live.com.
+
 """
 Authentication functionality for the Databricks MCP server.
 """
@@ -68,4 +73,4 @@ def get_current_user():
     Currently returns a placeholder.
     """
     # This would be expanded in a real application with actual user information
-    return {"username": "admin"} 
+    return {"username": "admin"}
