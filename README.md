@@ -20,22 +20,6 @@ The Databricks MCP Toolkit provides a comprehensive implementation of the Model 
 - **File System Access** - Browse and manage DBFS storage
 - **Real-time Monitoring** - Track execution status with automatic polling
 
-## Architecture
-
-The toolkit is structured as a multi-layered architecture:
-
-```
-┌─────────────────────────────────────┐
-│   MCP Protocol Interface Layer      │  ← Standard MCP tools
-├─────────────────────────────────────┤
-│   API Client Abstraction Layer      │  ← Databricks API wrappers
-├─────────────────────────────────────┤
-│   Core Services Layer               │  ← Auth, config, utilities
-├─────────────────────────────────────┤
-│   Databricks REST API               │  ← Databricks platform
-└─────────────────────────────────────┘
-```
-
 ## Prerequisites
 
 - **Python**: 3.10 or higher
@@ -185,20 +169,9 @@ The MCP server translates these requests into the appropriate API calls.
 
 ## MCP Tools Reference
 
-The toolkit provides 23 MCP tools organized into functional categories. All tools follow a consistent parameter format with a `params` wrapper object.
+The toolkit provides 23 MCP tools for Databricks operations.
 
-### Tool Invocation Pattern
-
-```python
-await server.call_tool('tool_name', {
-    'params': {
-        'parameter1': 'value1',
-        'parameter2': 'value2'
-    }
-})
-```
-
-### Cluster Management (5 tools)
+### Cluster Management
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
@@ -208,7 +181,7 @@ await server.call_tool('tool_name', {
 | `start_cluster` | Start terminated cluster | `cluster_id` |
 | `terminate_cluster` | Terminate running cluster | `cluster_id` |
 
-### Job Management (7 tools)
+### Job Management
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
@@ -220,26 +193,26 @@ await server.call_tool('tool_name', {
 | `get_run_output` | Retrieve run output | `run_id` |
 | `wait_for_run_completion` | Poll until run completes | `run_id`, `poll_interval`, `max_wait_seconds` |
 
-### Notebook Operations (2 tools)
+### Notebook Operations
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `list_notebooks` | List workspace notebooks | `path` |
 | `export_notebook` | Export notebook content | `path`, `format` (SOURCE/HTML/JUPYTER/DBC) |
 
-### File System (1 tool)
+### File System
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `list_files` | Browse DBFS contents | `dbfs_path` |
 
-### SQL Execution (1 tool)
+### SQL Execution
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `execute_sql` | Run SQL statements | `statement`, `warehouse_id` (optional), `catalog`, `schema` |
 
-### Command Execution (7 tools)
+### Command Execution
 
 Execute code directly on Databricks clusters with state persistence across commands.
 
@@ -253,38 +226,7 @@ Execute code directly on Databricks clusters with state persistence across comma
 | `get_context_status` | Verify context validity | `cluster_id`, `context_id` |
 | `execute_command_simple` | One-shot command execution | `cluster_id`, `command`, `language` |
 
-## Project Structure
-
-```
-databricks-mcp-toolkit/
-├── src/
-│   ├── main.py                          # Application entry point
-│   ├── server/
-│   │   └── databricks_mcp_server.py     # MCP server implementation
-│   ├── api/                             # Databricks API clients
-│   │   ├── clusters.py
-│   │   ├── jobs.py
-│   │   ├── notebooks.py
-│   │   ├── sql.py
-│   │   ├── command_execution.py
-│   │   └── dbfs.py
-│   ├── core/                            # Core services
-│   │   ├── auth.py
-│   │   ├── config.py
-│   │   └── utils.py
-│   └── cli/                             # CLI interface
-│       └── commands.py
-├── tests/                               # Test suite
-├── examples/                            # Usage examples
-├── scripts/                             # Utility scripts
-├── docs/                                # Documentation
-├── pyproject.toml                       # Project configuration
-└── README.md
-```
-
 ## Testing
-
-### Running Tests
 
 ```bash
 # Install development dependencies
@@ -295,16 +237,7 @@ pytest tests/ -v
 
 # Run with coverage
 pytest --cov=src tests/ --cov-report=term-missing
-
-# Run specific test file
-pytest tests/test_mcp_server.py -v
 ```
-
-### Test Categories
-
-- **Unit Tests**: Test individual functions and classes in isolation
-- **Integration Tests**: Test component interactions
-- **MCP Protocol Tests**: Verify MCP specification compliance
 
 ## Troubleshooting
 
@@ -341,24 +274,6 @@ Enable detailed logging for troubleshooting:
 ```bash
 LOG_LEVEL=DEBUG python -m src.main
 ```
-
-## Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Standards
-
-- Follow PEP 8 style guidelines
-- Include type hints for all functions
-- Write comprehensive docstrings (Google style)
-- Add tests for new functionality
-- Maintain 80%+ code coverage
 
 ## License
 
