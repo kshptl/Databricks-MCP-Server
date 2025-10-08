@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "databricks-mcp-toolkit"
+version = "0.1.0"
+description = "Enterprise-grade Model Context Protocol (MCP) toolkit for Databricks integration"
+authors = [
+    {name = "Kush Patel", email = "kushapatel@live.com"}
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "httpx",
+    "requests",
+    "databricks-sdk",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+cli = [
+    "click",
+]
+dev = [
+    "black",
+    "pylint",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.scripts]
+databricks-mcp = "src.cli.commands:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
