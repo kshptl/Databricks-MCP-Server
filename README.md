@@ -39,36 +39,42 @@ The toolkit is structured as a multi-layered architecture:
 ## Prerequisites
 
 - **Python**: 3.10 or higher
-- **Package Manager**: `uv` (recommended) or `pip`
 - **Databricks Access**: Valid workspace URL and personal access token
 - **SQL Warehouse**: (Optional) For SQL execution capabilities
+- **MCP Client**: Claude Desktop, Cline, or any MCP-compatible client
 
 ## Installation
 
-### Using uv (Recommended)
+### Using pip (Standard Method)
 
 ```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh  # Unix/Linux/macOS
-# OR
-irm https://astral.sh/uv/install.ps1 | iex      # Windows PowerShell
-
-# Clone and install
+# Clone the repository
 git clone https://github.com/kshptl/databricks-mcp-toolkit.git
 cd databricks-mcp-toolkit
-uv pip install -e .
-```
 
-### Using pip
-
-```bash
-git clone https://github.com/kshptl/databricks-mcp-toolkit.git
-cd databricks-mcp-toolkit
+# Create and activate virtual environment
 python -m venv .venv
+
+# Activate virtual environment
 source .venv/bin/activate  # Unix/Linux/macOS
-# OR
 .venv\Scripts\activate     # Windows
 
+# Install the toolkit
+pip install -e .
+```
+
+### Using conda
+
+```bash
+# Clone the repository
+git clone https://github.com/kshptl/databricks-mcp-toolkit.git
+cd databricks-mcp-toolkit
+
+# Create conda environment
+conda create -n databricks-mcp python=3.10
+conda activate databricks-mcp
+
+# Install the toolkit
 pip install -e .
 ```
 
@@ -91,39 +97,91 @@ DATABRICKS_WAREHOUSE_ID=1234567890123456
 2. **Access Token**: Generate from User Settings → Developer → Access Tokens
 3. **Warehouse ID**: Find in SQL → SQL Warehouses → Connection Details
 
-## Quick Start
+## Using with MCP Clients
 
-### Starting the Server
+This toolkit is designed to work with MCP-compatible clients like Claude Desktop, Cline, and other AI assistants.
 
-```bash
-# Activate virtual environment
-source .venv/bin/activate  # Unix/Linux/macOS
-.venv\Scripts\activate     # Windows
+### Claude Desktop Configuration
 
-# Start the MCP server
-python -m src.main
+Add this to your Claude Desktop configuration file:
+
+**macOS/Linux**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "databricks": {
+      "command": "python",
+      "args": ["-m", "src.main"],
+      "cwd": "/absolute/path/to/databricks-mcp-toolkit",
+      "env": {
+        "DATABRICKS_HOST": "https://your-workspace.azuredatabricks.net",
+        "DATABRICKS_TOKEN": "dapi1234567890abcdef",
+        "DATABRICKS_WAREHOUSE_ID": "your_warehouse_id"
+      }
+    }
+  }
+}
 ```
 
-### Basic Usage Example
-
-```python
-from src.server.databricks_mcp_server import DatabricksMCPServer
-
-async def main():
-    server = DatabricksMCPServer()
-    
-    # List available clusters
-    clusters = await server.call_tool('list_clusters', {'params': {}})
-    print(f"Available clusters: {len(clusters)}")
-    
-    # Execute SQL query
-    result = await server.call_tool('execute_sql', {
-        'params': {
-            'statement': 'SELECT COUNT(*) as row_count FROM my_table'
-        }
-    })
-    print(f"Query result: {result}")
+**Windows Example**:
+```json
+{
+  "mcpServers": {
+    "databricks": {
+      "command": "python",
+      "args": ["-m", "src.main"],
+      "cwd": "C:\\Users\\YourName\\databricks-mcp-toolkit",
+      "env": {
+        "DATABRICKS_HOST": "https://your-workspace.azuredatabricks.net",
+        "DATABRICKS_TOKEN": "dapi1234567890abcdef",
+        "DATABRICKS_WAREHOUSE_ID": "your_warehouse_id"
+      }
+    }
+  }
+}
 ```
+
+### Cline Configuration
+
+In Cline settings, add the MCP server:
+
+1. Open Cline settings
+2. Navigate to MCP Servers section
+3. Add new server with these settings:
+   - **Name**: databricks
+   - **Command**: `python`
+   - **Args**: `-m src.main`
+   - **Working Directory**: Path to databricks-mcp-toolkit
+   - **Environment Variables**:
+     - `DATABRICKS_HOST`: Your workspace URL
+     - `DATABRICKS_TOKEN`: Your access token
+     - `DATABRICKS_WAREHOUSE_ID`: Your warehouse ID (optional)
+
+### Verifying the Connection
+
+After configuration, restart your MCP client and test the connection:
+
+**In Claude Desktop or Cline, try:**
+```
+"List my Databricks clusters"
+```
+
+You should see the toolkit respond with your cluster information.
+
+### Available Commands
+
+Once configured, you can interact with Databricks using natural language:
+
+- "List all my Databricks clusters"
+- "Create a new cluster called 'analytics' with 2 workers"
+- "Run this SQL query: SELECT * FROM my_table LIMIT 10"
+- "Execute this Python code on cluster xyz: df.show()"
+- "Submit a notebook run for /path/to/notebook"
+- "Check the status of job run 12345"
+
+The MCP server translates these requests into the appropriate API calls.
 
 ## MCP Tools Reference
 
@@ -195,152 +253,6 @@ Execute code directly on Databricks clusters with state persistence across comma
 | `get_context_status` | Verify context validity | `cluster_id`, `context_id` |
 | `execute_command_simple` | One-shot command execution | `cluster_id`, `command`, `language` |
 
-## Usage Examples
-
-### Example 1: Cluster Lifecycle Management
-
-```python
-# Create a new cluster
-cluster = await server.call_tool('create_cluster', {
-    'params': {
-        'cluster_name': 'analytics-cluster',
-        'spark_version': '11.3.x-scala2.12',
-        'node_type_id': 'i3.xlarge',
-        'num_workers': 3,
-        'autotermination_minutes': 120
-    }
-})
-cluster_id = cluster['cluster_id']
-
-# Monitor cluster status
-status = await server.call_tool('get_cluster', {
-    'params': {'cluster_id': cluster_id}
-})
-
-# Terminate when done
-await server.call_tool('terminate_cluster', {
-    'params': {'cluster_id': cluster_id}
-})
-```
-
-### Example 2: Notebook Execution Workflow
-
-```python
-# Submit notebook for execution
-run = await server.call_tool('submit_single_run', {
-    'params': {
-        'run_config': {
-            'run_name': 'Data Processing Pipeline',
-            'tasks': [{
-                'task_key': 'etl_task',
-                'notebook_task': {
-                    'notebook_path': '/Shared/ETL/ProcessData',
-                    'base_parameters': {
-                        'date': '2025-01-07',
-                        'environment': 'production'
-                    }
-                },
-                'existing_cluster_id': 'your-cluster-id'
-            }],
-            'timeout_seconds': 3600
-        }
-    }
-})
-
-# Wait for completion with automatic polling
-final_state = await server.call_tool('wait_for_run_completion', {
-    'params': {
-        'run_id': run['run_id'],
-        'poll_interval': 10,
-        'max_wait_seconds': 3600
-    }
-})
-
-# Retrieve output if successful
-if final_state['state']['result_state'] == 'SUCCESS':
-    output = await server.call_tool('get_run_output', {
-        'params': {'run_id': run['run_id']}
-    })
-    print(f"Processing complete: {output['notebook_output']['result']}")
-```
-
-### Example 3: Interactive Command Execution
-
-```python
-# Create persistent execution context
-context = await server.call_tool('create_execution_context', {
-    'params': {
-        'cluster_id': 'your-cluster-id',
-        'language': 'python'
-    }
-})
-context_id = context['id']
-
-# Execute data loading
-cmd1 = await server.call_tool('execute_command', {
-    'params': {
-        'cluster_id': 'your-cluster-id',
-        'context_id': context_id,
-        'command': 'df = spark.read.parquet("/data/source.parquet")',
-        'language': 'python'
-    }
-})
-
-# Wait for completion (auto-polls)
-await server.call_tool('get_command_status', {
-    'params': {
-        'cluster_id': 'your-cluster-id',
-        'context_id': context_id,
-        'command_id': cmd1['id']
-    }
-})
-
-# Execute transformation (uses 'df' from previous command)
-cmd2 = await server.call_tool('execute_command', {
-    'params': {
-        'cluster_id': 'your-cluster-id',
-        'context_id': context_id,
-        'command': 'df.groupBy("category").count().show()',
-        'language': 'python'
-    }
-})
-
-# Clean up
-await server.call_tool('destroy_execution_context', {
-    'params': {
-        'cluster_id': 'your-cluster-id',
-        'context_id': context_id
-    }
-})
-```
-
-### Example 4: SQL Analytics
-
-```python
-# Execute analytical query
-result = await server.call_tool('execute_sql', {
-    'params': {
-        'statement': '''
-            SELECT 
-                department,
-                COUNT(*) as employee_count,
-                AVG(salary) as avg_salary
-            FROM hr.employees
-            WHERE status = 'active'
-            GROUP BY department
-            ORDER BY avg_salary DESC
-        ''',
-        'catalog': 'production',
-        'schema': 'hr'
-    }
-})
-
-# Process results
-for row in result['result']['data_array']:
-    dept, count, avg_sal = row
-    print(f"{dept}: {count} employees, avg salary: ${avg_sal:,.2f}")
-```
-
 ## Project Structure
 
 ```
@@ -376,7 +288,7 @@ databricks-mcp-toolkit/
 
 ```bash
 # Install development dependencies
-uv pip install -e ".[dev]"
+pip install -e ".[dev]"
 
 # Run all tests
 pytest tests/ -v
@@ -419,7 +331,7 @@ Solution: Verify your access token has required permissions for the operation
 **Module Import Errors**
 ```
 Issue: ModuleNotFoundError
-Solution: Ensure dependencies are installed: uv pip install -e .
+Solution: Ensure dependencies are installed: pip install -e .
 ```
 
 ### Debug Mode
