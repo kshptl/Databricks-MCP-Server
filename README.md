@@ -37,7 +37,7 @@ git clone https://github.com/kshptl/databricks-mcp-toolkit.git
 cd databricks-mcp-toolkit
 
 # Create and activate virtual environment
-python -m venv .venv
+python3 -m venv .venv  # Use python3 on Unix/Linux/macOS, python on Windows
 
 # Activate virtual environment
 source .venv/bin/activate  # Unix/Linux/macOS
