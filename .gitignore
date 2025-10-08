@@ -21,6 +21,7 @@ build/
 # IDE settings
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
@@ -100,4 +101,4 @@ ehthumbs.db
 Thumbs.db
 
 # Log files
-*.log 
+*.log
