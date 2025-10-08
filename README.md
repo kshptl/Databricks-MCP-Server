@@ -278,7 +278,7 @@ LOG_LEVEL=DEBUG python -m src.main
 ## Licensing
 
 Dual-licensed: AGPL-3.0 or commercial.
-Use under AGPL-3.0 for open-source. For production use without AGPL obligations, obtain a commercial license: <your email/url>.
+Use under AGPL-3.0 for open-source. For production use without AGPL obligations, obtain a commercial license: kushapatel@live.com.
 
 ## Support
 
