@@ -342,20 +342,6 @@ Enable detailed logging for troubleshooting:
 LOG_LEVEL=DEBUG python -m src.main
 ```
 
-## Performance Considerations
-
-- **Connection Pooling**: HTTP client uses connection pooling for efficiency
-- **Async Operations**: All API calls are asynchronous for better throughput
-- **Rate Limiting**: Built-in retry logic handles API rate limits
-- **Timeouts**: Configurable timeouts prevent hanging operations
-
-## Security Best Practices
-
-1. **Credential Management**: Never commit `.env` files or expose tokens
-2. **Token Rotation**: Regularly rotate Databricks access tokens
-3. **Least Privilege**: Use tokens with minimum required permissions
-4. **Network Security**: Use VPN/private endpoints for sensitive workloads
-
 ## Contributing
 
 Contributions are welcome! Please follow these guidelines:
