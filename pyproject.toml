@@ -1,47 +1,74 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "databricks-mcp-toolkit"
-version = "0.1.0"
-description = "Enterprise-grade Model Context Protocol (MCP) toolkit for Databricks integration"
-authors = [
-    {name = "Kush Patel", email = "kushapatel@live.com"}
-]
-requires-python = ">=3.10"
+dynamic = ["version"]
+description = "Model Context Protocol (MCP) server for Databricks: clusters, jobs, SQL, Unity Catalog, volumes and notebooks."
 readme = "README.md"
-license = {text = "MIT"}
+requires-python = ">=3.10"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Kush Patel" }]
+keywords = ["databricks", "mcp", "model-context-protocol", "llm", "ai-agents", "unity-catalog", "claude"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "mcp[cli]>=1.2.0",
-    "httpx",
-    "requests",
-    "databricks-sdk",
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
-    "python-dotenv",
+    "mcp>=2.3,<3",
+    "httpx>=0.27",
+    "databricks-sdk>=0.40",
+    "pydantic>=2.7",
 ]
 
 [project.optional-dependencies]
-cli = [
-    "click",
-]
 dev = [
-    "black",
-    "pylint",
-    "pytest",
-    "pytest-asyncio",
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+    "ruff>=0.6",
+    "build",
+    "twine",
 ]
+
+[project.urls]
+Homepage = "https://github.com/kshptl/Databricks-MCP-Server"
+Repository = "https://github.com/kshptl/Databricks-MCP-Server"
+Issues = "https://github.com/kshptl/Databricks-MCP-Server/issues"
+Changelog = "https://github.com/kshptl/Databricks-MCP-Server/blob/main/CHANGELOG.md"
 
 [project.scripts]
-databricks-mcp = "src.cli.commands:main"
+databricks-mcp = "databricks_mcp.cli:main"
+
+[tool.hatch.version]
+path = "src/databricks_mcp/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/databricks_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/databricks_mcp", "tests", "scripts", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
