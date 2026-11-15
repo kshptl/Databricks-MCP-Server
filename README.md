@@ -1,297 +1,244 @@
 # Databricks MCP Toolkit
 
-> Enterprise-grade Model Context Protocol (MCP) integration toolkit for Databricks, enabling seamless AI agent interactions with your data platform.
+[![PyPI](https://img.shields.io/pypi/v/databricks-mcp-toolkit.svg)](https://pypi.org/project/databricks-mcp-toolkit/)
+[![Python](https://img.shields.io/pypi/pyversions/databricks-mcp-toolkit.svg)](https://pypi.org/project/databricks-mcp-toolkit/)
+[![CI](https://github.com/kshptl/Databricks-MCP-Server/actions/workflows/ci.yml/badge.svg)](https://github.com/kshptl/Databricks-MCP-Server/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MCP Protocol](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io/)
+A [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude, Cursor, VS Code and other MCP clients work with a Databricks workspace. Through it, the assistant can browse Unity Catalog, run SQL, read and write volume files, manage clusters and jobs, export and import notebooks, and run code on a cluster.
 
-## Overview
+- **Current Databricks APIs:** Jobs 2.2, Clusters 2.1, Unity Catalog 2.1, the Files API for volumes, and SQL Statement Execution.
+- **Any Databricks auth method:** personal access tokens, OAuth (user or service principal), `~/.databrickscfg` profiles and Azure CLI, all handled by the official `databricks-sdk`.
+- **Safe to point at real workspaces:** a read-only mode, per-toolset filtering, MCP tool annotations (read-only and destructive hints), no automatic retries of non-idempotent calls, and response size caps so a big result doesn't flood the model's context.
 
-The Databricks MCP Toolkit provides a comprehensive implementation of the Model Context Protocol for Databricks, enabling AI agents and LLM-powered applications to programmatically interact with Databricks services. Built with enterprise requirements in mind, this toolkit offers robust cluster management, job orchestration, notebook execution, and SQL query capabilities through a standardized MCP interface.
+## Quick start
 
-### Key Capabilities
-
-- **Cluster Operations** - Full lifecycle management of Databricks compute resources
-- **Job Orchestration** - Submit, monitor, and control Databricks job executions
-- **Notebook Integration** - Execute notebooks with parameter passing and output retrieval
-- **SQL Execution** - Run SQL queries against Databricks SQL warehouses
-- **Command Execution** - Execute Python, Scala, SQL, or R code directly on clusters
-- **File System Access** - Browse and manage DBFS storage
-- **Real-time Monitoring** - Track execution status with automatic polling
-
-## Prerequisites
-
-- **Python**: 3.10 or higher
-- **Databricks Access**: Valid workspace URL and personal access token
-- **SQL Warehouse**: (Optional) For SQL execution capabilities
-- **MCP Client**: Claude Desktop, Cline, or any MCP-compatible client
-
-## Installation
-
-### Using pip (Standard Method)
+You need Python 3.10+ and [uv](https://docs.astral.sh/uv/) (or pipx/pip).
 
 ```bash
-# Clone the repository
-git clone https://github.com/kshptl/databricks-mcp-toolkit.git
-cd databricks-mcp-toolkit
+# try it without installing
+uvx --from databricks-mcp-toolkit databricks-mcp list-tools
 
-# Create and activate virtual environment
-python3 -m venv .venv  # Use python3 on Unix/Linux/macOS, python on Windows
-
-# Activate virtual environment
-source .venv/bin/activate  # Unix/Linux/macOS
-.venv\Scripts\activate     # Windows
-
-# Install the toolkit
-pip install -e .
+# or install it
+pipx install databricks-mcp-toolkit      # or: pip install databricks-mcp-toolkit
+databricks-mcp --version
 ```
 
-### Using conda
+### Claude Desktop
+
+Add this to `claude_desktop_config.json` (Settings → Developer → Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "databricks": {
+      "command": "uvx",
+      "args": ["--from", "databricks-mcp-toolkit", "databricks-mcp"],
+      "env": {
+        "DATABRICKS_HOST": "https://<your-workspace>.cloud.databricks.com",
+        "DATABRICKS_TOKEN": "<personal-access-token>",
+        "DATABRICKS_WAREHOUSE_ID": "<optional default SQL warehouse id>"
+      }
+    }
+  }
+}
+```
+
+### Claude Code
 
 ```bash
-# Clone the repository
-git clone https://github.com/kshptl/databricks-mcp-toolkit.git
-cd databricks-mcp-toolkit
-
-# Create conda environment
-conda create -n databricks-mcp python=3.10
-conda activate databricks-mcp
-
-# Install the toolkit
-pip install -e .
+claude mcp add databricks \
+  -e DATABRICKS_HOST=https://<your-workspace>.cloud.databricks.com \
+  -e DATABRICKS_TOKEN=<personal-access-token> \
+  -- uvx --from databricks-mcp-toolkit databricks-mcp
 ```
+
+### Cursor / VS Code / other clients
+
+Use the same command and env vars: `uvx --from databricks-mcp-toolkit databricks-mcp`. To serve over HTTP instead of stdio:
+
+```bash
+databricks-mcp run --transport streamable-http --host 127.0.0.1 --port 8000
+```
+
+## Authentication
+
+Auth is delegated to [Databricks unified auth](https://docs.databricks.com/aws/en/dev-tools/auth/unified-auth), so whatever works for the Databricks CLI works here:
+
+| Method | Set |
+|---|---|
+| Personal access token | `DATABRICKS_HOST`, `DATABRICKS_TOKEN` |
+| OAuth service principal (M2M) | `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, `DATABRICKS_CLIENT_SECRET` |
+| OAuth user login (U2M) | Run `databricks auth login --host <url>` once, then set `DATABRICKS_CONFIG_PROFILE` (or nothing for `DEFAULT`) |
+| Config profile | `DATABRICKS_CONFIG_PROFILE=<name>` from `~/.databrickscfg` |
+| Azure | Azure CLI login or the `ARM_*` / `DATABRICKS_AZURE_*` variables |
+
+For anything shared or automated, use a service principal that has only the permissions the assistant needs. The server can do anything that identity can do.
 
 ## Configuration
 
-Create a `.env` file in the project root with your Databricks credentials:
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABRICKS_WAREHOUSE_ID` | none | Default warehouse for `execute_sql` |
+| `DATABRICKS_MCP_READ_ONLY` | `false` | Only expose tools that can't change anything (also `--read-only`) |
+| `DATABRICKS_MCP_TOOLSETS` | all | Comma-separated subset: `clusters,jobs,workspace,volumes,dbfs,sql,unity_catalog,commands` (also `--toolsets`) |
+| `DATABRICKS_MCP_MAX_RESPONSE_CHARS` | `50000` | Larger tool results are truncated with a note telling the model to narrow the request |
+| `DATABRICKS_MCP_HTTP_TIMEOUT` | `60` | Per-request timeout, in seconds |
+| `DATABRICKS_MCP_MAX_RETRIES` | `3` | Retries for 429s and for 5xx/timeouts on idempotent requests |
+| `DATABRICKS_MCP_LOG_LEVEL` | `WARNING` | Logs go to stderr (stdout carries the MCP protocol) |
+| `DATABRICKS_MCP_TRANSPORT` | `stdio` | `stdio` or `streamable-http` |
+
+### Read-only mode
 
 ```bash
-# Required
-DATABRICKS_HOST=https://your-workspace.azuredatabricks.net
-DATABRICKS_TOKEN=dapi1234567890abcdef
-
-# Optional (for SQL functionality)
-DATABRICKS_WAREHOUSE_ID=1234567890123456
+databricks-mcp run --read-only
 ```
 
-### Obtaining Credentials
+This hides every tool that creates, changes or deletes something. That includes `execute_sql` and `run_command`, because arbitrary SQL or code can't be guaranteed read-only. What's left is browsing Unity Catalog, volumes, DBFS, the workspace, clusters, jobs, runs and warehouses. For read-only SQL, give a service principal `SELECT`-only grants and run without `--read-only`.
 
-1. **Workspace URL**: Your Databricks workspace URL (e.g., `https://adb-123456789.azuredatabricks.net`)
-2. **Access Token**: Generate from User Settings → Developer → Access Tokens
-3. **Warehouse ID**: Find in SQL → SQL Warehouses → Connection Details
+## Tools
 
-## Using with MCP Clients
+48 tools in 8 toolsets. Run `databricks-mcp list-tools` to see what your settings expose.
 
-This toolkit is designed to work with MCP-compatible clients like Claude Desktop, Cline, and other AI assistants.
+<!-- tools:start -->
 
-### Claude Desktop Configuration
+**Clusters** (`clusters`)
 
-Add this to your Claude Desktop configuration file:
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_clusters` | ✓ | List pinned and active clusters, plus clusters terminated in the last 30 days. |
+| `get_cluster` | ✓ | Get the full configuration and state of one cluster. |
+| `list_spark_versions` | ✓ | List Databricks Runtime versions (spark_version keys) available for new clusters. |
+| `list_node_types` | ✓ | List instance types (node_type_id values) available in this workspace. |
+| `create_cluster` |  | Create an all-purpose cluster. This starts billable compute. |
+| `start_cluster` |  | Start a terminated cluster. |
+| `restart_cluster` |  | Restart a running cluster. Running commands and notebook state are lost. |
+| `resize_cluster` |  | Resize a running cluster to a fixed worker count or an autoscale range. |
+| `terminate_cluster` |  | Terminate (stop) a cluster. Its config is kept and it can be started again. |
 
-**macOS/Linux**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Jobs** (`jobs`)
 
-```json
-{
-  "mcpServers": {
-    "databricks": {
-      "command": "python",
-      "args": ["-m", "src.main"],
-      "cwd": "/absolute/path/to/databricks-mcp-toolkit",
-      "env": {
-        "DATABRICKS_HOST": "https://your-workspace.azuredatabricks.net",
-        "DATABRICKS_TOKEN": "dapi1234567890abcdef",
-        "DATABRICKS_WAREHOUSE_ID": "your_warehouse_id"
-      }
-    }
-  }
-}
-```
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_jobs` | ✓ | List jobs (summary: id, name, creator, created time). |
+| `get_job` | ✓ | Get a job's full settings (tasks, clusters, schedule, parameters). |
+| `list_job_runs` | ✓ | List job runs, newest first. |
+| `get_run` | ✓ | Get a run's details, including per-task state. |
+| `get_run_output` | ✓ | Get a run's output: notebook exit value, logs, error and trace. For a multi-task run, returns each task's output. |
+| `wait_for_run` | ✓ | Poll a run until it finishes or the timeout passes. Returns its final state. |
+| `run_job` |  | Trigger a run of an existing job. Returns run_id. |
+| `submit_run` |  | Submit a one-time run without creating a job. Returns run_id. |
+| `cancel_run` |  | Cancel an active run. |
 
-**Windows Example**:
-```json
-{
-  "mcpServers": {
-    "databricks": {
-      "command": "python",
-      "args": ["-m", "src.main"],
-      "cwd": "C:\\Users\\YourName\\databricks-mcp-toolkit",
-      "env": {
-        "DATABRICKS_HOST": "https://your-workspace.azuredatabricks.net",
-        "DATABRICKS_TOKEN": "dapi1234567890abcdef",
-        "DATABRICKS_WAREHOUSE_ID": "your_warehouse_id"
-      }
-    }
-  }
-}
-```
+**Workspace / notebooks** (`workspace`)
 
-### Cline Configuration
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_workspace` | ✓ | List notebooks, files and folders in a workspace directory. |
+| `get_workspace_object` | ✓ | Get metadata (type, language, ids) for a workspace path. |
+| `export_notebook` | ✓ | Export a notebook's contents as text. |
+| `import_notebook` |  | Create or (with overwrite=true) replace a notebook. language is required for SOURCE. |
+| `create_workspace_directory` |  | Create a workspace folder, including missing parents. |
 
-In Cline settings, add the MCP server:
+**Unity Catalog volumes (Files API)** (`volumes`)
 
-1. Open Cline settings
-2. Navigate to MCP Servers section
-3. Add new server with these settings:
-   - **Name**: databricks
-   - **Command**: `python`
-   - **Args**: `-m src.main`
-   - **Working Directory**: Path to databricks-mcp-toolkit
-   - **Environment Variables**:
-     - `DATABRICKS_HOST`: Your workspace URL
-     - `DATABRICKS_TOKEN`: Your access token
-     - `DATABRICKS_WAREHOUSE_ID`: Your warehouse ID (optional)
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_volume_directory` | ✓ | List files and folders in a Unity Catalog volume directory. |
+| `read_volume_file` | ✓ | Read the start of a text file in a volume (up to max_bytes). |
+| `write_volume_file` |  | Write a text file to a volume. Fails if it exists unless overwrite=true. |
+| `delete_volume_file` |  | Delete a file from a volume. |
+| `create_volume_directory` |  | Create a directory in a volume, including missing parents. |
 
-### Verifying the Connection
+**DBFS (legacy, read-only)** (`dbfs`)
 
-After configuration, restart your MCP client and test the connection:
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_dbfs` | ✓ | List a legacy DBFS path. Prefer volumes for new data. |
+| `read_dbfs_file` | ✓ | Read the start of a text file on legacy DBFS. |
 
-**In Claude Desktop or Cline, try:**
-```
-"List my Databricks clusters"
-```
+**SQL warehouses & queries** (`sql`)
 
-You should see the toolkit respond with your cluster information.
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_sql_warehouses` | ✓ | List SQL warehouses with their id, state and size. |
+| `get_sql_warehouse` | ✓ | Get one SQL warehouse's full configuration and state. |
+| `start_sql_warehouse` |  | Start a stopped SQL warehouse. |
+| `stop_sql_warehouse` |  | Stop a SQL warehouse. Running queries on it are cancelled. |
+| `execute_sql` |  | Run a SQL statement on a SQL warehouse and return columns + rows. If it outlives timeout_seconds you get a statement_id to poll with get_sql_statement. |
+| `get_sql_statement` | ✓ | Get the state and (if finished) results of a SQL statement. |
+| `cancel_sql_statement` |  | Cancel a running SQL statement. |
 
-### Available Commands
+**Unity Catalog** (`unity_catalog`)
 
-Once configured, you can interact with Databricks using natural language:
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `list_catalogs` | ✓ | List Unity Catalog catalogs you can see. |
+| `list_schemas` | ✓ | List schemas in a catalog. |
+| `list_tables` | ✓ | List tables and views in a schema (names and types; use get_table for columns). |
+| `get_table` | ✓ | Get a table's columns, types, comments, format and storage location. |
+| `list_volumes` | ✓ | List Unity Catalog volumes in a schema. |
 
-- "List all my Databricks clusters"
-- "Create a new cluster called 'analytics' with 2 workers"
-- "Run this SQL query: SELECT * FROM my_table LIMIT 10"
-- "Execute this Python code on cluster xyz: df.show()"
-- "Submit a notebook run for /path/to/notebook"
-- "Check the status of job run 12345"
+**Run code on a cluster** (`commands`)
 
-The MCP server translates these requests into the appropriate API calls.
+| Tool | Read-only | What it does |
+|---|:---:|---|
+| `run_command` |  | Run one snippet of code on a running cluster and return its result. Creates and destroys a throwaway context; use create_execution_context to keep state between calls. |
+| `create_execution_context` |  | Create a stateful execution context on a running cluster. Returns its id. |
+| `execute_command` |  | Run code in an existing context; variables persist between calls. |
+| `get_command_status` | ✓ | Get a command's status and, when finished, its results. |
+| `cancel_command` |  | Cancel a running command. |
+| `destroy_execution_context` |  | Destroy an execution context and free its resources on the cluster. |
 
-## MCP Tools Reference
+<!-- tools:end -->
+## Databricks API versions used
 
-The toolkit provides 23 MCP tools for Databricks operations.
+| Area | Endpoint |
+|---|---|
+| Jobs | `/api/2.2/jobs/*` (current version; queues runs by default, pages tasks past 100) |
+| Clusters | `/api/2.1/clusters/*` |
+| Unity Catalog | `/api/2.1/unity-catalog/*` |
+| Volumes | Files API `/api/2.0/fs/files`, `/api/2.0/fs/directories` |
+| SQL | `/api/2.0/sql/statements`, `/api/2.0/sql/warehouses` |
+| Workspace | `/api/2.0/workspace/*` |
+| Commands | `/api/1.2/contexts/*`, `/api/1.2/commands/*` (still the current version) |
+| DBFS | `/api/2.0/dbfs/*` (legacy; read-only here) |
 
-### Cluster Management
+Files API 3.0 is still in beta. It needs an admin preview toggle and a regional hostname, so the server stays on 2.0 for now.
 
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `list_clusters` | Enumerate all clusters | None |
-| `create_cluster` | Provision new cluster | `cluster_name`, `spark_version`, `node_type_id`, `num_workers` |
-| `get_cluster` | Retrieve cluster details | `cluster_id` |
-| `start_cluster` | Start terminated cluster | `cluster_id` |
-| `terminate_cluster` | Terminate running cluster | `cluster_id` |
+## Upgrading from 0.1.x
 
-### Job Management
+0.2.0 is a rewrite, and several things changed:
 
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `list_jobs` | List all jobs | None |
-| `get_job` | Get job configuration | `job_id` |
-| `run_job` | Execute existing job | `job_id`, `notebook_params` (optional) |
-| `submit_single_run` | Submit one-time notebook run | `run_config` |
-| `get_run` | Get run details | `run_id` |
-| `get_run_output` | Retrieve run output | `run_id` |
-| `wait_for_run_completion` | Poll until run completes | `run_id`, `poll_interval`, `max_wait_seconds` |
+- **Install and command:** install with `pip install databricks-mcp-toolkit`, then run `databricks-mcp` (or `python -m databricks_mcp`). Clone-and-`pip install -e .` is no longer needed, and the old `start_mcp_server.sh` and `.ps1` scripts are gone.
+- **Tool arguments:** tools now take typed, named arguments. Before, every tool took one opaque `params` object.
+- **Renamed tools:**
+  - `list_notebooks` → `list_workspace`
+  - `list_files` → `list_dbfs`
+  - `submit_single_run` → `submit_run`
+  - `wait_for_run_completion` → `wait_for_run`
+  - `execute_command_simple` → `run_command`
+  - `get_context_status` was removed
+- **MCP SDK:** it now requires `mcp>=2.3`. The 0.1.x code imported `FastMCP`, which doesn't exist in MCP 2.x, so a fresh install of 0.1.x fails to start.
 
-### Notebook Operations
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `list_notebooks` | List workspace notebooks | `path` |
-| `export_notebook` | Export notebook content | `path`, `format` (SOURCE/HTML/JUPYTER/DBC) |
-
-### File System
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `list_files` | Browse DBFS contents | `dbfs_path` |
-
-### SQL Execution
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `execute_sql` | Run SQL statements | `statement`, `warehouse_id` (optional), `catalog`, `schema` |
-
-### Command Execution
-
-Execute code directly on Databricks clusters with state persistence across commands.
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `create_execution_context` | Initialize execution context | `cluster_id`, `language` (python/scala/sql/r) |
-| `execute_command` | Run code in context | `cluster_id`, `context_id`, `command`, `language` |
-| `get_command_status` | Check command status (auto-polls) | `cluster_id`, `context_id`, `command_id` |
-| `cancel_command` | Cancel running command | `cluster_id`, `context_id`, `command_id` |
-| `destroy_execution_context` | Clean up context | `cluster_id`, `context_id` |
-| `get_context_status` | Verify context validity | `cluster_id`, `context_id` |
-| `execute_command_simple` | One-shot command execution | `cluster_id`, `command`, `language` |
-
-## Testing
+## Development
 
 ```bash
-# Install development dependencies
+git clone https://github.com/kshptl/Databricks-MCP-Server
+cd Databricks-MCP-Server
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-
-# Run all tests
-pytest tests/ -v
-
-# Run with coverage
-pytest --cov=src tests/ --cov-report=term-missing
+pytest              # unit tests; HTTP is mocked, so no workspace is needed
+ruff check src tests && ruff format --check src tests
 ```
 
-## Troubleshooting
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md). Releases are covered in [RELEASING.md](RELEASING.md).
 
-### Common Issues
+## License
 
-**Connection Errors**
-```
-Issue: Unable to connect to Databricks API
-Solution: Verify DATABRICKS_HOST and DATABRICKS_TOKEN in .env file
-```
+Dual-licensed:
 
-**SQL Execution Failures**
-```
-Issue: 400 Bad Request on SQL queries
-Solution: Ensure DATABRICKS_WAREHOUSE_ID is set and warehouse is running
-```
+- **[AGPL-3.0-only](LICENSE)** for open-source use. If you run a modified version as a network service, you must offer its source to the service's users.
+- **Commercial license** if the AGPL terms don't fit your use. Open an issue or contact the author through their GitHub profile.
 
-**Permission Denied**
-```
-Issue: 403 Forbidden on API calls
-Solution: Verify your access token has required permissions for the operation
-```
-
-**Module Import Errors**
-```
-Issue: ModuleNotFoundError
-Solution: Ensure dependencies are installed: pip install -e .
-```
-
-### Debug Mode
-
-Enable detailed logging for troubleshooting:
-
-```bash
-LOG_LEVEL=DEBUG python -m src.main
-```
-
-## Licensing
-
-Dual-licensed: AGPL-3.0 or commercial.
-Use under AGPL-3.0 for open-source. For production use without AGPL obligations, obtain a commercial license: kushapatel@live.com.
-
-## Support
-
-- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/kshptl/databricks-mcp-toolkit/issues)
-- **Documentation**: See the [examples/](examples/) directory for detailed usage examples
-- **MCP Protocol**: Learn more at [Model Context Protocol](https://modelcontextprotocol.io/)
-
-## Acknowledgments
-
-Built with the Model Context Protocol specification and Databricks Python SDK.
-
----
-
-**Author**: Kush Patel  
-**Repository**: https://github.com/kshptl/databricks-mcp-toolkit  
-**MCP Version**: 1.0
+This project is not affiliated with or endorsed by Databricks, Inc.
