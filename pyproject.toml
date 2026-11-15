@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
-authors = [{ name = "Kush Patel", email = "kushapatel@live.com" }]
+authors = [{ name = "Kush Patel" }]
 keywords = ["databricks", "mcp", "model-context-protocol", "llm", "ai-agents", "unity-catalog", "claude"]
 classifiers = [
     "Development Status :: 4 - Beta",
